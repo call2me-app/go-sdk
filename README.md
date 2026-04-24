@@ -157,6 +157,37 @@ client.Widgets.Chat("widget_id", "Hello")
 client.Voices.List()
 ```
 
+### Events
+
+Forward application errors and business events to the Call2Me
+observability pipeline.
+
+```go
+_, _ = client.Events.Report(call2me.EventReport{
+    Type:     "payment_failed",
+    Source:   "api",
+    Message:  "Paddle rejected the webhook",
+    Severity: "error",
+    Meta:     map[string]interface{}{"payment_id": "pay_abc"},
+})
+
+// Admin-only — query archived (error+) events:
+items, _ := client.Events.Query("error", "", "", 24, 50)
+```
+
+Common `Type` values: `js_error`, `unhandled_rejection`, `http_5xx`,
+`auth_login`, `auth_signup`, `payment_success`, `payment_failed`,
+`call_started`, `call_ended`, `call_failed`, `agent_crash`.
+
+## Changelog
+
+### v1.3.0 (2026-04-24)
+- Add `Events` service — `EventReport` struct, `Events.Report()` and
+  `Events.Query()` for forwarding events into the observability pipeline.
+
+### v1.1.0
+- Full API coverage, 13 services.
+
 ## Links
 
 - **Website**: [call2me.app](https://call2me.app)
