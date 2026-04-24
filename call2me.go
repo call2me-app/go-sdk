@@ -29,6 +29,7 @@ type Client struct {
 	Widgets      *WidgetsService
 	Voices       *VoicesService
 	Payments     *PaymentsService
+	Events       *EventsService
 }
 
 func New(apiKey string) *Client {
@@ -46,6 +47,7 @@ func New(apiKey string) *Client {
 	c.Widgets = &WidgetsService{c}
 	c.Voices = &VoicesService{c}
 	c.Payments = &PaymentsService{c}
+	c.Events = &EventsService{c}
 	return c
 }
 
@@ -168,3 +170,42 @@ type PaymentsService struct{ c *Client }
 func (s *PaymentsService) Checkout(amount float64, currency string) (M, error) { return one(s.c.do("POST", "/v1/payments/checkout", M{"amount": amount, "currency": currency})) }
 func (s *PaymentsService) History() ([]M, error)    { return list(s.c.get("/v1/payments/history")) }
 func (s *PaymentsService) SavedCards() ([]M, error)  { return list(s.c.get("/v1/payments/saved-cards")) }
+
+// EventsService — report operational / business events to Call2Me.
+// POST /v1/events is public (no auth required) but sending the API key
+// lifts the per-minute ceiling from 10 (anon) to 100 (authenticated).
+// GET is admin-only.
+type EventsService struct{ c *Client }
+
+// EventReport is the payload for Events.Report.
+// Fields mirror the server's IncomingEvent model — only Type, Source, and
+// Message are required.
+type EventReport struct {
+	Type        string                 `json:"type"`
+	Source      string                 `json:"source"`
+	Message     string                 `json:"message"`
+	Severity    string                 `json:"severity,omitempty"`
+	Tenant      string                 `json:"tenant,omitempty"`
+	SessionID   string                 `json:"session_id,omitempty"`
+	Fingerprint string                 `json:"fingerprint,omitempty"`
+	Meta        map[string]interface{} `json:"meta,omitempty"`
+}
+
+func (s *EventsService) Report(r EventReport) (M, error) {
+	if r.Source == "" { r.Source = "api" }
+	return one(s.c.do("POST", "/v1/events", r))
+}
+
+func (s *EventsService) Query(severity, typ, fingerprint string, hours, limit int) ([]M, error) {
+	params := []string{}
+	if severity != "" { params = append(params, "severity", severity) }
+	if typ != "" { params = append(params, "type", typ) }
+	if fingerprint != "" { params = append(params, "fingerprint", fingerprint) }
+	if hours > 0 { params = append(params, "hours", fmt.Sprintf("%d", hours)) }
+	if limit > 0 { params = append(params, "limit", fmt.Sprintf("%d", limit)) }
+	data, err := s.c.get("/v1/events", params...)
+	if err != nil { return nil, err }
+	var r struct{ Items []M `json:"items"` }
+	json.Unmarshal(data, &r)
+	return r.Items, nil
+}
