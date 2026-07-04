@@ -30,6 +30,7 @@ type Client struct {
 	Voices       *VoicesService
 	Payments     *PaymentsService
 	Events       *EventsService
+	VoiceSessions *VoiceSessionsService
 }
 
 func New(apiKey string) *Client {
@@ -48,6 +49,7 @@ func New(apiKey string) *Client {
 	c.Voices = &VoicesService{c}
 	c.Payments = &PaymentsService{c}
 	c.Events = &EventsService{c}
+	c.VoiceSessions = &VoiceSessionsService{c}
 	return c
 }
 
@@ -93,6 +95,11 @@ func (c *Client) get(path string, params ...string) ([]byte, error) {
 
 func list(data []byte, err error) ([]M, error) { if err != nil { return nil, err }; var r []M; json.Unmarshal(data, &r); return r, nil }
 func one(data []byte, err error) (M, error) { if err != nil { return nil, err }; var r M; json.Unmarshal(data, &r); return r, nil }
+
+type VoiceSessionsService struct{ c *Client }
+func (s *VoiceSessionsService) CreateSession(agentID string, context M) (M, error) {
+	return one(s.c.do("POST", "/v1/voice/sessions", M{"agent_id": agentID, "context": context}))
+}
 
 type AgentsService struct{ c *Client }
 func (s *AgentsService) List() ([]M, error)                     { return list(s.c.get("/v1/agents")) }

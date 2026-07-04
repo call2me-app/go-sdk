@@ -23,7 +23,7 @@ Requires Go 1.21+
 
 ## Getting Your API Key
 
-1. Sign up at [dashboard.call2me.app](https://dashboard.call2me.app/signup) — you get **$10 free credits**
+1. Sign up at [dash.call2me.app](https://dash.call2me.app/signup) — you get **$10 free credits**
 2. Go to **API Keys** in the dashboard
 3. Click **Create API Key** and copy your `sk_call2me_...` key
 
@@ -157,6 +157,13 @@ client.Widgets.Chat("widget_id", "Hello")
 client.Voices.List()
 ```
 
+### Headless voice sessions
+```go
+s, _ := client.VoiceSessions.CreateSession("agent_abc123", nil)
+// s["token"], s["url"], s["room_name"], s["session_limit_sec"]
+// Connect a LiveKit client with the token+url; the agent auto-joins and talks.
+```
+
 ### Events
 
 Forward application errors and business events to the Call2Me
@@ -181,6 +188,9 @@ Common `Type` values: `js_error`, `unhandled_rejection`, `http_5xx`,
 
 ## Changelog
 
+### v1.4.0 (2026-07-02)
+- Added `VoiceSessions.CreateSession(agentID, context)` — open a headless AI voice session with an agent.
+
 ### v1.3.0 (2026-04-24)
 - Add `Events` service — `EventReport` struct, `Events.Report()` and
   `Events.Query()` for forwarding events into the observability pipeline.
@@ -191,7 +201,7 @@ Common `Type` values: `js_error`, `unhandled_rejection`, `http_5xx`,
 ## Links
 
 - **Website**: [call2me.app](https://call2me.app)
-- **Dashboard**: [dashboard.call2me.app](https://dashboard.call2me.app)
+- **Dashboard**: [dash.call2me.app](https://dash.call2me.app)
 - **API Docs**: [call2me.app/docs](https://call2me.app/docs)
 - **Guides**: [call2me.app/guides](https://call2me.app/guides)
 - **GitHub**: [github.com/call2me-app/go-sdk](https://github.com/call2me-app/go-sdk)
