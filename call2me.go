@@ -31,6 +31,8 @@ type Client struct {
 	Payments     *PaymentsService
 	Events       *EventsService
 	VoiceSessions *VoiceSessionsService
+	EndUsers      *EndUsersService
+	Webhooks      *WebhooksService
 }
 
 func New(apiKey string) *Client {
@@ -50,6 +52,8 @@ func New(apiKey string) *Client {
 	c.Payments = &PaymentsService{c}
 	c.Events = &EventsService{c}
 	c.VoiceSessions = &VoiceSessionsService{c}
+	c.EndUsers = &EndUsersService{c}
+	c.Webhooks = &WebhooksService{c}
 	return c
 }
 
@@ -100,6 +104,21 @@ type VoiceSessionsService struct{ c *Client }
 func (s *VoiceSessionsService) CreateSession(agentID string, context M) (M, error) {
 	return one(s.c.do("POST", "/v1/voice/sessions", M{"agent_id": agentID, "context": context}))
 }
+// Get fetches a voice session's detail + transcript by room name.
+func (s *VoiceSessionsService) Get(roomName string) (M, error) {
+	return one(s.c.do("GET", "/v1/voice/sessions/"+roomName, nil))
+}
+
+type EndUsersService struct{ c *Client }
+// CreateToken mints an ephemeral end-user token (eut_) billed to the calling tenant.
+func (s *EndUsersService) CreateToken(externalID string, opts M) (M, error) {
+	return one(s.c.do("POST", "/v1/end-users/"+externalID+"/tokens", opts))
+}
+
+type WebhooksService struct{ c *Client }
+// Set replaces this tenant's webhook URL + secret (secret auto-generated if omitted).
+func (s *WebhooksService) Set(opts M) (M, error) { return one(s.c.do("PUT", "/v1/webhooks", opts)) }
+func (s *WebhooksService) Get() (M, error)       { return one(s.c.do("GET", "/v1/webhooks", nil)) }
 
 type AgentsService struct{ c *Client }
 func (s *AgentsService) List() ([]M, error)                     { return list(s.c.get("/v1/agents")) }
@@ -155,7 +174,7 @@ func (s *SipTrunksService) Test(id string) (M, error) { return one(s.c.do("POST"
 type ApiKeysService struct{ c *Client }
 func (s *ApiKeysService) List() ([]M, error)        { return list(s.c.get("/v1/api-keys")) }
 func (s *ApiKeysService) Create(data M) (M, error)   { return one(s.c.do("POST", "/v1/api-keys", data)) }
-func (s *ApiKeysService) Revoke(id string) (M, error) { return one(s.c.do("PATCH", "/v1/api-keys/"+id+"/revoke", nil)) }
+func (s *ApiKeysService) Revoke(id string) (M, error) { return one(s.c.do("DELETE", "/v1/api-keys/"+id, nil)) }
 func (s *ApiKeysService) Delete(id string) error      { _, err := s.c.do("DELETE", "/v1/api-keys/"+id, nil); return err }
 
 type UsersService struct{ c *Client }
