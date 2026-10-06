@@ -33,6 +33,12 @@ type Client struct {
 	VoiceSessions *VoiceSessionsService
 	EndUsers      *EndUsersService
 	Webhooks      *WebhooksService
+	// 5 Eki 2026'da eklendi: 278 uçtan yalnız 83'ü kapsanıyordu ve
+	// tercümanın 11 ucunun HİÇBİRİ yoktu.
+	Interpreters  *InterpretersService
+	Numbers       *NumbersService
+	Sms           *SmsService
+	Extension     *ExtensionService
 }
 
 func New(apiKey string) *Client {
@@ -54,6 +60,10 @@ func New(apiKey string) *Client {
 	c.VoiceSessions = &VoiceSessionsService{c}
 	c.EndUsers = &EndUsersService{c}
 	c.Webhooks = &WebhooksService{c}
+	c.Interpreters = &InterpretersService{c}
+	c.Numbers = &NumbersService{c}
+	c.Sms = &SmsService{c}
+	c.Extension = &ExtensionService{c}
 	return c
 }
 
@@ -131,6 +141,15 @@ func (s *AgentsService) Stats(id string) (M, error)              { return one(s.
 
 type CallsService struct{ c *Client }
 func (s *CallsService) List() ([]M, error)      { return list(s.c.get("/v1/calls")) }
+// Create places a REAL outbound call — to_number is dialled and charged.
+//
+// `topic` is why the call is being placed; it reaches the agent as
+// call_purpose and is woven into both the opening line and the system
+// prompt, so the agent states its reason instead of a generic greeting.
+//
+// Missing from this SDK until 5 Oct 2026 despite the README advertising
+// outbound calling.
+func (s *CallsService) Create(data M) (M, error) { return one(s.c.do("POST", "/v1/calls", clean(data))) }
 func (s *CallsService) Get(id string) (M, error) { return one(s.c.do("GET", "/v1/calls/"+id, nil)) }
 func (s *CallsService) End(id string) (M, error) { return one(s.c.do("POST", "/v1/calls/"+id+"/end", nil)) }
 
@@ -195,7 +214,7 @@ func (s *VoicesService) List() ([]M, error) { return list(s.c.get("/v1/voices"))
 type PaymentsService struct{ c *Client }
 func (s *PaymentsService) Checkout(amount float64, currency string) (M, error) { return one(s.c.do("POST", "/v1/payments/checkout", M{"amount": amount, "currency": currency})) }
 func (s *PaymentsService) History() ([]M, error)    { return list(s.c.get("/v1/payments/history")) }
-func (s *PaymentsService) SavedCards() ([]M, error)  { return list(s.c.get("/v1/payments/saved-cards")) }
+func (s *PaymentsService) SavedCards() ([]M, error)  { return list(s.c.get("/v1/payments/methods")) }
 
 // EventsService — report operational / business events to Call2Me.
 // POST /v1/events is public (no auth required) but sending the API key
@@ -234,4 +253,160 @@ func (s *EventsService) Query(severity, typ, fingerprint string, hours, limit in
 	var r struct{ Items []M `json:"items"` }
 	json.Unmarshal(data, &r)
 	return r.Items, nil
+}
+
+// clean drops keys whose value is nil.
+//
+// Optional fields are passed as nil, but sending an explicit null is not
+// the same as omitting the field — some endpoints reject it with a 422.
+func clean(m M) M {
+	out := M{}
+	for k, v := range m {
+		if v == nil {
+			continue
+		}
+		if s, ok := v.(string); ok && s == "" {
+			continue
+		}
+		out[k] = v
+	}
+	return out
+}
+
+// InterpretersService — live interpreter: two people each speak their own
+// language. Covers both delivery paths: a phone call that dials both sides,
+// and a browser session with a shareable link. None of this existed in this
+// SDK before 5 Oct 2026 even though the interpreter is a headline product.
+type InterpretersService struct{ c *Client }
+
+func (s *InterpretersService) List(limit, offset int) ([]M, error) {
+	return list(s.c.get("/v1/interpreters", "limit", fmt.Sprintf("%d", limit), "offset", fmt.Sprintf("%d", offset)))
+}
+func (s *InterpretersService) Get(id string) (M, error) {
+	return one(s.c.do("GET", "/v1/interpreters/"+id, nil))
+}
+
+// Create — name and both languages are required. Without phoneNumber only
+// the browser path works; the phone path needs a line to dial out from.
+func (s *InterpretersService) Create(data M) (M, error) {
+	return one(s.c.do("POST", "/v1/interpreters", clean(data)))
+}
+func (s *InterpretersService) Update(id string, data M) (M, error) {
+	return one(s.c.do("PATCH", "/v1/interpreters/"+id, clean(data)))
+}
+func (s *InterpretersService) Delete(id string) error {
+	_, err := s.c.do("DELETE", "/v1/interpreters/"+id, nil)
+	return err
+}
+
+// Calls — sessions run through any interpreter on the account.
+func (s *InterpretersService) Calls(limit, offset int) ([]M, error) {
+	return list(s.c.get("/v1/interpreters/calls", "limit", fmt.Sprintf("%d", limit), "offset", fmt.Sprintf("%d", offset)))
+}
+
+// Call places a REAL interpreted phone call — both sides are dialled and
+// the call is charged. targetNumber is required.
+func (s *InterpretersService) Call(id, targetNumber, initiatorNumber string) (M, error) {
+	return one(s.c.do("POST", "/v1/interpreters/"+id+"/call", clean(M{
+		"target_number": targetNumber, "initiator_number": initiatorNumber,
+	})))
+}
+
+// EnableWeb opens or closes the browser session link. Places no phone call.
+func (s *InterpretersService) EnableWeb(id string, enabled bool, requiresPasscode interface{}) (M, error) {
+	return one(s.c.do("POST", "/v1/interpreters/"+id+"/web", clean(M{
+		"enabled": enabled, "requires_passcode": requiresPasscode,
+	})))
+}
+func (s *InterpretersService) EndWeb(id string) (M, error) {
+	return one(s.c.do("POST", "/v1/interpreters/"+id+"/web/end", nil))
+}
+
+// WebStatus — who is connected to the browser session right now.
+func (s *InterpretersService) WebStatus(id string) (M, error) {
+	return one(s.c.do("GET", "/v1/interpreters/"+id+"/web/live", nil))
+}
+
+// CreatePasscode mints a single-use join passcode for the browser session.
+func (s *InterpretersService) CreatePasscode(id string) (M, error) {
+	return one(s.c.do("POST", "/v1/interpreters/"+id+"/web/passcodes", nil))
+}
+
+// NumbersService — searching and buying phone numbers. Distinct from
+// PhoneNumbers, which manages numbers you already own.
+type NumbersService struct{ c *Client }
+
+func (s *NumbersService) AllowedCountries() ([]M, error) {
+	return list(s.c.get("/v1/numbers/allowed-countries"))
+}
+
+// Search lists purchasable numbers. Does NOT buy anything.
+func (s *NumbersService) Search(country string, params ...string) ([]M, error) {
+	return list(s.c.get("/v1/numbers/search", append([]string{"country", country}, params...)...))
+}
+
+// Purchase BUYS the number: the balance is charged and monthly rent starts.
+func (s *NumbersService) Purchase(data M) (M, error) {
+	return one(s.c.do("POST", "/v1/numbers/purchase", clean(data)))
+}
+
+// Checkout returns a payment link; it does not charge by itself.
+func (s *NumbersService) Checkout(data M) (M, error) {
+	return one(s.c.do("POST", "/v1/numbers/checkout", clean(data)))
+}
+
+// Release PERMANENTLY releases the number; it leaves the account.
+func (s *NumbersService) Release(number string) error {
+	_, err := s.c.do("DELETE", "/v1/numbers/"+number, nil)
+	return err
+}
+
+type SmsService struct{ c *Client }
+
+func (s *SmsService) Send(to, text, from string) (M, error) {
+	return one(s.c.do("POST", "/v1/sms", clean(M{"to": to, "text": text, "from": from})))
+}
+func (s *SmsService) List(params ...string) ([]M, error) {
+	return list(s.c.get("/v1/sms", params...))
+}
+
+// ExtensionService — Chrome extension, live translation of a browser tab.
+// Device-scoped: the extension links a browser to the account, then runs
+// sessions against that link.
+type ExtensionService struct{ c *Client }
+
+func (s *ExtensionService) Config(deviceID string) (M, error) {
+	return one(s.c.get("/v1/ext/config", "device_id", deviceID))
+}
+
+// Usage — minutes used and remaining for the account.
+func (s *ExtensionService) Usage() (M, error) { return one(s.c.get("/v1/ext/usage")) }
+
+func (s *ExtensionService) LinkRequest(deviceID, email string) (M, error) {
+	return one(s.c.do("POST", "/v1/ext/link/request", M{"device_id": deviceID, "email": email}))
+}
+func (s *ExtensionService) LinkConfirm(token string) (M, error) {
+	return one(s.c.do("POST", "/v1/ext/link/confirm", M{"token": token}))
+}
+func (s *ExtensionService) LinkStatus(deviceID string) (M, error) {
+	return one(s.c.do("POST", "/v1/ext/link/status", M{"device_id": deviceID}))
+}
+func (s *ExtensionService) LinkAttach(deviceID string) (M, error) {
+	return one(s.c.do("POST", "/v1/ext/link/attach", M{"device_id": deviceID}))
+}
+func (s *ExtensionService) LinkDetach(deviceID string) (M, error) {
+	return one(s.c.do("POST", "/v1/ext/link/detach", M{"device_id": deviceID}))
+}
+func (s *ExtensionService) SessionStart(data M) (M, error) {
+	return one(s.c.do("POST", "/v1/ext/session/start", clean(data)))
+}
+func (s *ExtensionService) SessionHeartbeat(deviceID, sessionID string, elapsedSeconds int) (M, error) {
+	return one(s.c.do("POST", "/v1/ext/session/heartbeat", M{
+		"device_id": deviceID, "session_id": sessionID, "elapsed_seconds": elapsedSeconds,
+	}))
+}
+func (s *ExtensionService) SessionEnd(deviceID, sessionID, reason string) (M, error) {
+	return one(s.c.do("POST", "/v1/ext/session/end", clean(M{
+		"device_id": deviceID, "session_id": sessionID, "reason": reason,
+	})))
 }
