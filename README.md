@@ -58,7 +58,7 @@ func main() {
 ```go
 client.Agents.List()
 client.Agents.Get("agent_id")
-client.Agents.Create(call2me.M{"agent_name": "My Agent", "voice_id": "elevenlabs-selin"})
+client.Agents.Create(call2me.M{"agent_name": "My Agent", "voice_id": "elevenlabs-CFzl8WvPQ92EKMBs2hpS"})
 client.Agents.Update("agent_id", call2me.M{"agent_name": "New Name"})
 client.Agents.Delete("agent_id")
 client.Agents.Duplicate("agent_id")
