@@ -67,6 +67,15 @@ client.Agents.Stats("agent_id")
 
 ### Calls
 ```go
+// Outbound call (REAL — dialled and charged). DynamicVariables fill {{key}}
+// placeholders in the agent's prompt/opening/closing for this call only;
+// BeginMessage is this call's opening line (outbound ignores the static one).
+client.Calls.CreateCall(call2me.CallCreateParams{
+	AgentID:          "agent_id",
+	ToNumber:         "+15551234567",
+	DynamicVariables: map[string]string{"name": "Ada", "order_id": "A-42"},
+	BeginMessage:     "Hi {{name}}, calling about your order {{order_id}}.",
+})
 client.Calls.List()
 client.Calls.Get("call_id")
 client.Calls.End("call_id")
@@ -187,6 +196,9 @@ Common `Type` values: `js_error`, `unhandled_rejection`, `http_5xx`,
 `call_started`, `call_ended`, `call_failed`, `agent_crash`.
 
 ## Changelog
+
+### v1.6.0 (2026-11-01)
+- Added `Calls.CreateCall(CallCreateParams)` with `DynamicVariables` and `BeginMessage` (both `omitempty`). `Calls.Create(M)` also passes `dynamic_variables` / `begin_message` through.
 
 ### v1.4.0 (2026-07-02)
 - Added `VoiceSessions.CreateSession(agentID, context)` — open a headless AI voice session with an agent.

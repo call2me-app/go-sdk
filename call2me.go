@@ -150,6 +150,28 @@ func (s *CallsService) List() ([]M, error)      { return list(s.c.get("/v1/calls
 // Missing from this SDK until 5 Oct 2026 despite the README advertising
 // outbound calling.
 func (s *CallsService) Create(data M) (M, error) { return one(s.c.do("POST", "/v1/calls", clean(data))) }
+
+// CallCreateParams is the typed body of POST /v1/calls. Empty optional
+// fields are omitted from the request (an explicit null can be rejected).
+type CallCreateParams struct {
+	AgentID    string                 `json:"agent_id"`
+	ToNumber   string                 `json:"to_number"`
+	FromNumber string                 `json:"from_number,omitempty"`
+	Topic      string                 `json:"topic,omitempty"`
+	Metadata   map[string]interface{} `json:"metadata,omitempty"`
+	// DynamicVariables fills {{key}} placeholders in the agent's prompt,
+	// opening and closing lines for this call only. ≤50 keys, key
+	// ^[A-Za-z_][A-Za-z0-9_]{0,63}$, value ≤1000 chars, total ≤32 KB.
+	DynamicVariables map[string]string `json:"dynamic_variables,omitempty"`
+	// BeginMessage (≤500 chars) is this call's opening line. On outbound
+	// calls the agent's static opening is not used, so this is the way to set it.
+	BeginMessage string `json:"begin_message,omitempty"`
+}
+
+// CreateCall places a REAL outbound call from typed params — see Create.
+func (s *CallsService) CreateCall(p CallCreateParams) (M, error) {
+	return one(s.c.do("POST", "/v1/calls", p))
+}
 func (s *CallsService) Get(id string) (M, error) { return one(s.c.do("GET", "/v1/calls/"+id, nil)) }
 func (s *CallsService) End(id string) (M, error) { return one(s.c.do("POST", "/v1/calls/"+id+"/end", nil)) }
 
